@@ -4,9 +4,11 @@
 @inject OrderState OrderState
 @inject HttpClient HttpClient
 @inject NavigationManager NavigationManager
+@implements IDisposable
 
 <div class="main">
-    <EditForm Model=Order.DeliveryAddress OnValidSubmit=PlaceOrder>
+    @* <EditForm Model=Order.DeliveryAddress OnValidSubmit=PlaceOrder> *@
+    <EditForm EditContext=editContext OnValidSubmit=PlaceOrder>
         <div class="checkout-cols">
             <div class="checkout-order-details">
                 <h4>Review order</h4>
@@ -23,7 +25,8 @@
             </div>
         </div>
 
-        <button class="checkout-button btn btn-warning" disabled=@_isSubmitting>
+        @* <button class="checkout-button btn btn-warning" disabled=@_isSubmitting> *@
+        <button class="checkout-button btn btn-warning" type="Submit" disabled=@_isError>
             Place order
         </button>
         <DataAnnotationsValidator />
@@ -31,12 +34,27 @@
 </div>
 
 @code {
+    private EditContext editContext;
     Order Order => OrderState.Order;
-    bool _isSubmitting;
-    bool _isError = false;
+    //bool _isSubmitting;
+    bool _isError = true;
+    protected override void OnInitialized()
+    {
+        editContext = new(Order.DeliveryAddress);
+        editContext.OnFieldChanged += HandleFieldChanged;
+    }
+    private void HandleFieldChanged(object sender, FieldChangedEventArgs e)
+    {
+        _isError = !editContext.Validate();
+        StateHasChanged();
+    }
+    public void Dispose()
+    {
+        editContext.OnFieldChanged -= HandleFieldChanged;
+    }
     private async Task CheckSubmission(EditContext editContext)
     {
-        _isSubmitting = true;
+        //_isSubmitting = true;
         var model = editContext.Model as Address;
         _isError = string.IsNullOrWhiteSpace(model?.Name)
         || string.IsNullOrWhiteSpace(model?.Line1)
@@ -45,15 +63,22 @@
         {
             await PlaceOrder();
         }
-        _isSubmitting = false;
+        //_isSubmitting = false;
     }
+    @* async Task PlaceOrder()
+        {
+            //_isSubmitting = true;
+            var response = await HttpClient.PostAsJsonAsync($"{NavigationManager.BaseUri}orders", OrderState.Order);
+            var newOrderId = await response.Content.ReadFromJsonAsync<int>();
+            OrderState.ResetOrder();
+            //NavigationManager.NavigateTo("/myorders");
+            NavigationManager.NavigateTo($"myorders/{newOrderId}");
+        } *@
     async Task PlaceOrder()
     {
-        //_isSubmitting = true;
-        var response = await HttpClient.PostAsJsonAsync($"{NavigationManager.BaseUri}orders", OrderState.Order);
+        var response = await HttpClient.PostAsJsonAsync(NavigationManager.BaseUri + "orders", OrderState.Order);
         var newOrderId = await response.Content.ReadFromJsonAsync<int>();
         OrderState.ResetOrder();
-        //NavigationManager.NavigateTo("/myorders");
         NavigationManager.NavigateTo($"myorders/{newOrderId}");
     }
 }
